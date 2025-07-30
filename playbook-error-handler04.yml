@@ -20,6 +20,12 @@
     ## therefore our PRECHECK PHASE needs to involve a 'check' to ensure we ONLY are on
     ## Debian hosts
     - name: PRECHECK PHASE
+      block:
+           - name: Ensure the platforms we logged into are Debian
+             ansible.builtin.fail:
+               msg: "Ansible has detected this host is not part of the Debian family."
+             when: ansible_os_family != "Debian"
+
       rescue:
            - name: PRECHECK PHASE - FAILED
              ansible.builtin.fail:
@@ -29,6 +35,18 @@
     ## this is the block containing the work we actually want to do
     - name: MAINTENANCE PHASE
       block:
+           - name: Install services(s) to our remote host(s)
+             ansible.builtin.apt:
+               state: present
+               name: "{{ apps_to_install }}"
+             become: yes
+
+           - name: Turn up the service(s) installed on our remote host(s)
+             ansible.builtin.service:
+               name: "{{ item }}"
+               state: started
+             loop: "{{ apps_to_install }}"
+             become: yes
 
       ## this rescue only runs if the BLOCK fails
       rescue:
@@ -57,24 +75,7 @@
                msg: "Ansible has detected not all services have installed."
              when: ansible_facts.services.get(item).state != "running"
              loop: "{{ apps_to_install }}"
-           - name: Install services(s) to our remote host(s)
-             ansible.builtin.apt:
-               state: present
-               name: "{{ apps_to_install }}"
-             become: yes
 
-           - name: Turn up the service(s) installed on our remote host(s)
-             ansible.builtin.service:
-               name: "{{ item }}"
-               state: started
-             loop: "{{ apps_to_install }}"
-             become: yes
-            - name: Ensure the platforms we logged into are Debian
-             ansible.builtin.fail:
-               msg: "Ansible has detected this host is not part of the Debian family."
-             when: ansible_os_family != "Debian"
-           - name: Inject a fail
-             ansible.builtin.shell: "/bin/false"
       ## this rescue only runs if the BLOCK fails
       rescue:
            - name: Remove services(s) on our remote host(s)
